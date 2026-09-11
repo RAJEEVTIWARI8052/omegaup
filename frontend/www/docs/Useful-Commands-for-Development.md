@@ -37,8 +37,7 @@ Below is a list of commands/scripts that are useful for people involved in devel
 npx cypress open
 ```
 **Description:** Opens the `Cypress Test Runner`, a graphical interface that allows interactive test execution and debugging. Additional configurations may be required for local environments; the most common are:
-- Install `nodejs`
-- Install `npm`
+- Install Node.js 24 (LTS) — use [nvm](https://github.com/nvm-sh/nvm) and run `nvm install` / `nvm use` in the repo root (see [`.nvmrc`](https://github.com/omegaup/omegaup/blob/main/.nvmrc))
 - Install `libasound2`
 
 \* For more detailed information, visit [How to use Cypress in omegaUp](https://github.com/omegaup/omegaup/blob/main/frontend/www/docs/How-to-use-Cypress-in-omegaUp.md)
@@ -76,11 +75,18 @@ find frontend/ \
 **Description:** Runs unit tests for an individual PHP file. To run all tests, omit the file name.  
 **Execution Location:** Inside the Docker container, in the root directory.  
 
-### Apply changes to schema.sql
+### Regenerate DAO files from schema
 ```bash
 ./stuff/update-dao.sh
 ```
-**Description:** Applies changes to the `schema.sql` file when adding a new migration file in `.sql`. Works until the migration file is committed.
+**Description:** Updates DAO (Data Access Object) files after modifying the database schema. This script should be run as part of a **two-step deployment process**:
+
+1. **First commit:** Modify `schema.sql` and add migration scripts (`database/*.sql`). Deploy to production and verify everything works correctly.
+2. **Second commit (after verification):** Run this script to:
+   - Copy `schema.sql` to `dao_schema.sql`
+   - Regenerate all DAO Base and VO PHP files in `frontend/server/src/DAO/`
+
+**Why separate commits?** This allows safe rollback if the schema migration fails in production. Since DAOs aren't regenerated yet, the old code continues working, and you can manually revert database changes without code conflicts.
 
 **Execution Location:** Inside the Docker container, in the root directory.  
 
@@ -116,3 +122,35 @@ systemctl restart docker.service
 OCI runtime exec failed: exec failed: unable to start container process: open /dev/pts/0: operation not permitted: unknown
 ```
 **Execution Location:** Outside the docker container
+
+### Verify GitHub Actions workflow references
+```bash
+./hack/gha-reversemap.sh verify-mapusage
+```
+**Description:** Checks that all workflow files in `.github/workflows` reference GitHub Actions by commit hash and that each hash matches the one in `.gha-reversemap.yml`. This ensures GitHub Actions are referenced by immutable commit hashes rather than mutable tags. You can optionally specify specific workflow files as arguments.  
+**Prerequisites:** Requires `yq` (version v4.45 or higher) to be installed.  
+**Execution Location:** Outside the Docker container, in the project's root directory. e.g. `ubuntu@pc:~/dev/omegaup$`
+
+### Apply reversemap to GitHub Actions workflows
+```bash
+./hack/gha-reversemap.sh apply-reversemap
+```
+**Description:** Updates workflow files in `.github/workflows` with commit hashes from `.gha-reversemap.yml`, replacing any tag references with the corresponding commit hashes. You can optionally specify specific workflow files as arguments.  
+**Prerequisites:** Requires `yq` (version v4.45 or higher) to be installed.  
+**Execution Location:** Outside the Docker container, in the project's root directory. e.g. `ubuntu@pc:~/dev/omegaup$`
+
+### Update GitHub Action version in reversemap
+```bash
+./hack/gha-reversemap.sh update-action-version actions/checkout
+```
+**Description:** Updates the version of a GitHub Action in `.gha-reversemap.yml` (sha, tag, urls) to its latest regular release tag. Replace `actions/checkout` with the action reference you want to update (format: `{gh_owner}/{gh_repo}`). You can update multiple actions by providing multiple arguments.  
+**Prerequisites:** Requires `yq` (version v4.45 or higher) to be installed. Optionally set `GITHUB_TOKEN` environment variable to avoid rate limiting.  
+**Execution Location:** Outside the Docker container, in the project's root directory. e.g. `ubuntu@pc:~/dev/omegaup$`
+
+### Update reversemap from GitHub Actions workflows
+```bash
+./hack/gha-reversemap.sh update-reversemap
+```
+**Description:** Updates `.gha-reversemap.yml` with information (sha, tag, urls) from the GitHub Actions used in workflow files. If workflow files reference actions by tags, it fetches the corresponding commit hashes and updates the reversemap. You can optionally specify specific workflow files as arguments.  
+**Prerequisites:** Requires `yq` (version v4.45 or higher) to be installed. Optionally set `GITHUB_TOKEN` environment variable to avoid rate limiting.  
+**Execution Location:** Outside the Docker container, in the project's root directory. e.g. `ubuntu@pc:~/dev/omegaup$`

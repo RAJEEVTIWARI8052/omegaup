@@ -1,3 +1,4 @@
+import { v4 as uuid } from 'uuid';
 import { LoginOptions } from '../support/types';
 import T from '../../frontend/www/js/omegaup/lang';
 import { problemCreatorPage } from '../support/pageObjects/problemCreatorPage';
@@ -65,6 +66,33 @@ describe('Problem creator Test', () => {
         cy.get('[data-problem-creator-previewer-markdown]').should(
           'have.html',
           '<h1>Previsualización</h1>\n\n<p>Hello omegaUp!</p>',
+        );
+      });
+
+      it(`Should support Live Preview and Pagedown controls - ${mode.name}`, () => {
+        mode.visit();
+        cy.get('[data-problem-creator-tab="statement"]').click();
+
+        // Type text and verify live preview (no save needed)
+        cy.get('[data-problem-creator-editor-markdown]').type(
+          'Live Preview Test ',
+        );
+        cy.get('[data-problem-creator-previewer-markdown]').should(
+          'contain.text',
+          'Live Preview Test',
+        );
+
+        // Click Bold button and verify live preview updates
+        cy.get('#wmd-bold-button').click();
+        cy.get('[data-problem-creator-editor-markdown]').should(
+          'contain.value',
+          '**strong text**',
+        );
+        // Verify preview contains strong tag (escaped or rendered?)
+        // The markdown preview renders HTML.
+        cy.get('[data-problem-creator-previewer-markdown]').should(
+          'contain.html',
+          '<strong>strong text</strong>',
         );
       });
 
@@ -268,5 +296,68 @@ describe('Problem creator Test', () => {
         });
       });
     });
+  });
+
+  it('Should submit create problem using creator-generated zip in feature-flag flow', () => {
+    const problemAlias = `creator-${uuid().slice(0, 8)}`;
+    const autoCompleteTextTag = 'recur';
+    const creatorProblemContentsInput =
+      '.introjs-open-creator input[name="problem_contents"]';
+
+    // Enable the experiment via the admin API so the test does not depend on
+    // OMEGAUP_EXPERIMENT_SECRET / HMAC hashes that differ between environments.
+    cy.loginAdmin();
+    cy.request({
+      method: 'POST',
+      url: '/api/user/addExperiment/',
+      form: true,
+      body: {
+        username: loginOptions.username,
+        experiment: 'problem_creation_method_selector',
+      },
+    }).then((response) => {
+      expect(response.status).to.equal(200);
+    });
+    cy.logoutUsingApi();
+
+    cy.login(loginOptions);
+    cy.setCookie('has-visited-create-problem', true.toString());
+
+    cy.visit('/problem/new/');
+
+    cy.get('[name="title"]').type(problemAlias).blur();
+    cy.get('[name="source"]').type(problemAlias);
+
+    cy.get('[data-tags-input]').type(autoCompleteTextTag);
+    cy.waitUntil(() =>
+      cy
+        .get('[data-tags-input] .vbt-autcomplete-list a.vbst-item:first')
+        .should('exist')
+        .click({ force: true }),
+    );
+
+    cy.get('[name="problem-level"]').select(1);
+
+    cy.get('.introjs-creation-method .btn-group button').first().click();
+    cy.get('.introjs-open-creator button').click();
+
+    // Add a case in the creator so the generated zip has a valid layout
+    cy.get('[data-problem-creator-tab="cases"]').click();
+    cy.get('[data-add-window]').click();
+    cy.get('[data-problem-creator-add-panel-tab="case"]').click();
+    cy.get('[data-problem-creator-case-input="name"]').type('case1');
+    cy.get('[data-problem-creator-add-panel-submit]').click();
+
+    cy.get('[data-problem-creator-close]').click();
+
+    cy.get(creatorProblemContentsInput, { timeout: 10000 }).should(
+      'have.attr',
+      'data-problem-creator-zip-ready',
+      'true',
+    );
+
+    cy.get('button[type="submit"]').click();
+
+    cy.url({ timeout: 15000 }).should('include', problemAlias);
   });
 });

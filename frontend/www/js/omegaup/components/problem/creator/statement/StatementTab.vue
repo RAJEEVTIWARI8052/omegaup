@@ -6,9 +6,10 @@
           <div ref="markdownButtonBar" class="wmd-button-bar"></div>
           <textarea
             ref="markdownInput"
-            v-model.lazy="currentMarkdown"
+            v-model="currentMarkdown"
             data-problem-creator-editor-markdown
             class="wmd-input"
+            @change="currentMarkdown = $event.target.value"
             @paste="handlePaste"
             @drop="handleDrop"
           ></textarea>
@@ -26,6 +27,7 @@
       <div class="row">
         <div class="col-md-12">
           <button
+            v-if="!hideSaveButton"
             data-problem-creator-save-markdown
             class="btn btn-primary"
             type="submit"
@@ -45,8 +47,7 @@ import * as Markdown from '@/third_party/js/pagedown/Markdown.Editor.js';
 import * as markdown from '../../../../markdown';
 import T from '../../../../lang';
 import * as ui from '../../../../ui';
-
-import omegaup_problemMarkdown from '../../ProblemMarkdown.vue';
+import ProblemMarkdown from '../../ProblemMarkdown.vue';
 
 const markdownConverter = new markdown.Converter({
   preview: true,
@@ -54,7 +55,7 @@ const markdownConverter = new markdown.Converter({
 
 @Component({
   components: {
-    'omegaup-markdown': omegaup_problemMarkdown,
+    'omegaup-markdown': ProblemMarkdown,
   },
 })
 export default class StatementTab extends Vue {
@@ -62,6 +63,7 @@ export default class StatementTab extends Vue {
   @Ref() readonly markdownInput!: HTMLTextAreaElement;
 
   @Prop({ default: T.problemCreatorEmpty }) currentMarkdownProp!: string;
+  @Prop({ default: false }) hideSaveButton!: boolean;
 
   T = T;
   ui = ui;
@@ -98,6 +100,10 @@ export default class StatementTab extends Vue {
   updateMarkdown() {
     this.$store.commit('updateMarkdown', this.currentMarkdown);
     this.$emit('show-update-success-message');
+  }
+
+  persistDraft(): void {
+    this.$store.commit('updateMarkdown', this.currentMarkdown);
   }
 
   /**
